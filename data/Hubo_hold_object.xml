@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<world>
+  <robot name="huboplus" file="huboplus/huboplus_col.rob" position="0.0 0.0 0.0"/>  
+
+  <rigidObject name="sphere" file="sphere_big.obj"  position="-0.5,-0.55, 0.8" >
+	
+  </rigidObject> 
+
+</world>

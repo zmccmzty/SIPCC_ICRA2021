@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<world>
+  <robot name="gripper" file="robotiQ_3finger.rob" position="0.0 0.0 0.2"/>  
+
+  <rigidObject name="wineglass" file="wineglass.obj"  rotateX = "1.57" position="0.0 0 0.5" >
+	
+  </rigidObject> 
+
+</world>

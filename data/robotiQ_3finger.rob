@@ -1,0 +1,78 @@
+### Kinematics of the Robotiq gripper ###
+links "x" "y" "z" "theta_x" "theta_z" "theta_y" "fin1_end" "fin2_end" "thumb_end"
+TParent   1 0 0   0 1 0  0 0 1    -0.0196 0 -0.2675\
+	  1 0 0   0 1 0  0 0 1    0 0 0 \
+	  1 0 0   0 1 0  0 0 1    0 0 0 \
+	  1 0 0   0 1 0  0 0 1    0 0 0 \
+	  1 0 0   0 1 0  0 0 1    0 0 0 \
+	 -1 0 0   0 0 1  0 1 0    0 0 0 \
+          0 1 0    1 0 0   0 0 -1  -0.044 0.02 0.037 \
+          0 1 0    1 0 0   0 0 -1  -0.044 0.02 -0.037 \
+          0 -1 0    1 0 0   0 0 1   0.047 0.02 0.0
+parents     -1  0 1 2 3 4 5 5 5        
+axis       1 0 0   0 1 0   0 0 1   1 0 0  0 0 1  0 0 1   0 1 0   0 1 0  0 1 0    
+jointtype p p p r r r r r r
+qMin   -20 -20 -20 -20 -20 -20 -0.094 -0.094 0
+qMax   20 20 20 20 20 20 0.094 0.094 0
+velMax 0 0 0 0 0 0 0.5 0.5 0 
+accMax 0 0 0 0 0 0 1 1 0
+q      0 0 0 0 0 0 0 0 0 
+geometry   ""  ""  ""  ""  ""  "RobotiQ/palm.off"   "RobotiQ/link0.off"    "RobotiQ/link0.off"  "RobotiQ/link0.off" 
+#noSelfCollision  1 2  2 3  2 4  3 4  1 4   
+mass       0  0  0  0  0  1  0.15   0.15  0.15
+automass
+
+#inertia m.offx     [7300   0     -650
+#                     0     8800    0
+#                    -650  0      7000]kg*mm^2
+
+torqueMax  inf inf inf inf inf inf  10   10  10
+joint weld  5
+joint weld  8
+joint normal 6
+joint normal 7
+#scissor joint     indices   scale factors       offsets dmin dmax vmin  vmax tmin tmax
+driver affine 2      1 2       0.296706 -0.296706  0 0     -1   1    -1.57 1.57 -10 10
+
+servoP  50 
+servoD  0  
+servoI  10 
+dryFriction 1 
+viscousFriction 3
+ 
+mount 5 "RobotiQ/finger.rob"    0 -1 0  1 0 0   0 0 1    0.04  0.039  0  as "thumb"
+mount 6 "RobotiQ/finger.rob"    1 0 0  0 1 0   0 0 1     0.018  0.0008   -0.0005  as "finger1"
+mount 7 "RobotiQ/finger.rob"    1 0 0  0 1 0   0 0 1     0.018  0.0008   0.0005 as "finger2"
+
+
+#scissor 1 to scissor 2
+noselfcollision 6 7
+#scissor 1 to scissor 3
+noselfcollision 6 8
+#scissor 2 to scissor 3
+noselfcollision 7 8 
+
+#finger 1 
+noselfcollision 5 12              #palm
+noselfcollision 6 13   6 14        #scissor 1 
+noselfcollision 7 12  7 13  7 14    #scissor 2 
+noselfcollision 8 12  8 13  8 14    #scissor 3 
+#finger 2 
+noselfcollision 5 15                #palm
+noselfcollision 5 17                #palm
+noselfcollision 5 16                #palm
+noselfcollision 7 16   7 17         #scissor 2 
+noselfcollision 6 15  6 16  6 17    #scissor 1 
+noselfcollision 8 15  8 16  8 17    #scissor 3 
+#finger 3 
+noselfcollision 5 9              #palm
+noselfcollision 8 9  8 10  8 11   #scissor 3 
+noselfcollision 6 9  6 10  6 11   #scissor 1 
+noselfcollision 7 9  7 10  7 11    #scissor 2 
+
+#proximal to distal joints, all fingers
+noselfcollision 9 11  12 14  15 17
+
+
+
+
