@@ -393,6 +393,7 @@ class InfiniteObjectiveFunction:
         """
         return _StackedInfiniteObjectiveAdaptor(self,x,y,z)
 
+
 class InfiniteConstraint:
     """A infinite constraint is a function of the form h(x,y,z) ==0 or >= 0
     where x is in R^n, y is a single index point from some domain D,
@@ -523,6 +524,7 @@ class InfiniteAggregateConstraint:
         """
         return _StackedInfiniteConstraintAdaptor(self,y,len(x))
 
+
 class InfiniteComplementarityConstraint(InfiniteConstraint):
     """Represents the constraint g(x,y)^T z <= 0 with g a
     SemiInfiniteConstraintInterface object.
@@ -545,6 +547,8 @@ class InfiniteComplementarityConstraint(InfiniteConstraint):
         return (J.T).dot(z)
     def df_dz(self,x,y,z):
         return np.asarray([self.g.value(x,y)]*len(z))
+
+
 class InfiniteConstraintToAggregateConstraint(InfiniteAggregateConstraint):
     """Converts a single InfiniteConstraint into an InfiniteAggregateConstraint
     simply by stacking.
@@ -583,7 +587,10 @@ class InfiniteConstraintToAggregateConstraint(InfiniteAggregateConstraint):
         for i in range(n):
             yi = y[i]
             zi = z[i*m:i*m+m]
-            dfs.append(self.f.df_dz(x,yi,zi))
+            dfdz = self.f.df_dz(x,yi,zi)
+            if len(dfdz.shape) == 1:  #f must be a scalar value
+                dfdz = dfdz.reshape((1,dfdz.shape[0]))
+            dfs.append(dfdz)
         return scipy.sparse.block_diag(tuple(dfs))
     
 class _StackedInfiniteObjectiveAdaptor(ObjectiveFunctionInterface):
