@@ -369,17 +369,16 @@ def optimizeGrasping(robot,objs,init_config,gridres,pcres,score_oracle=False):
 
     robot.setConfig(init_config)
     
-    # Set up collison constraints
-    collision_constraints,pairs = makeCollisionConstraints(robot,objs,gridres,pcres)
-    print(f"Created {len(collision_constraints)} collision constraints")
+    robot_geometry = RobotKinematicsCache(robot,gridres,pcres)
+    object_geometry = PenetrationDepthGeometry(objs[0].geometry(),gridres,pcres)
                 
     q_init = robot.getConfig()  
     
     grasping_problem = SIPCCProblem()
     grasping_problem.set_objective(ConstantObjectiveFunction(0))
-    grasping_problem.set_complementarity(RobotCollisionConstraint(robot,PenetrationDepthGeometry(objs[0].geometry(),gridres,pcres),gridres,pcres))
+    grasping_problem.set_complementarity(RobotCollisionConstraint(robot,object_geometry,gridres,pcres,robot_geometry))
     grasping_problem.add_ineq(FrictionConstraint())
-    grasping_problem.add_eq(Equilibrium3DConstraint(objs[0],PenetrationDepthGeometry(objs[0].geometry(),gridres,pcres)))
+    grasping_problem.add_eq(Equilibrium3DConstraint(objs[0],object_geometry))
     grasping_problem.oracle = grasping_oracle
     
     x_init = q_init
