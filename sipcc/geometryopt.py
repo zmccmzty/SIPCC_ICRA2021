@@ -93,7 +93,13 @@ class PenetrationDepthGeometry:
     def getTransform(self):
         return self.geom.getCurrentTransform()
     def distance(self,other,bound=None):
-        """Returns (distance, closestpoint_self, closestpoint_other)"""
+        """Returns (distance, closestpoint_self, closestpoint_other).
+        
+        If other is a point, uses this geometry's grid.
+
+        If other is a geometry, tries to use this geometry's point cloud and the
+        other's grid.
+        """
         if isinstance(other,(list,tuple)):
             #it's a point (or ball)
             if USE_BALLS:
@@ -115,6 +121,8 @@ class PenetrationDepthGeometry:
                 cp2 = cp2 + [0.0]
         else:
             settings = DistanceQuerySettings()
+            settings.relErr=0
+            settings.absErr=0
             if bound is not None:
                 settings.upperBound = bound
             assert isinstance(other,PenetrationDepthGeometry)

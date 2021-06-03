@@ -37,7 +37,8 @@ if testcase == 'hubo': # Humanoid & Sphere
     gridres = 0.004
     pcres = 0.004
 else:
-    gridres = 0.0008
+    #gridres = 0.0008
+    gridres = 0.002
     pcres = 0.001 
 
 # Set up the robot and object    
@@ -51,6 +52,7 @@ object_ = obstacles[0]
 print(f"{world.numRobots()} robots, {world.numRigidObjects()} rigid objects")
 
 # Set initial configuretion for the robot
+collision_links = None
 if testcase == 'sphere':
     init_config = [0.022, -0.0, 0.41, 0.0, 0.0, -3.14, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
 if testcase == 'glass':
@@ -77,9 +79,10 @@ if testcase == 'hubo':
     init_config[41] = -1
     init_config[44] = -1
     init_config[47] = -1
+    collision_links = list(range(51))
 
 t_start = time.time()        
-x,y,z = optimizeGrasping(robot,obstacles,init_config,gridres,pcres,score_oracle=True)
+x,y,z = optimizeGrasping(robot,obstacles,init_config,gridres,pcres,score_oracle='LSO',collision_links=collision_links)
 t_end = time.time()
 print(f"Total time: {t_end-t_start}")
 robot.setConfig(x)
