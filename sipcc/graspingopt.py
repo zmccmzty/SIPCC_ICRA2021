@@ -11,13 +11,14 @@ from klampt.io.numpy_convert import to_numpy
 from sklearn.neighbors import KDTree
 import heapq
 from sipcc.sipcc import optimizeSIPCC
+from klampt.model.trajectory import Trajectory
 
 #ORACLE = 'MVO'
 ORACLE = 'LSO'
 #ORACLE = 'GSO'
 
 NUM_FRICTION_CONE_EDGES = 6
-LOCAL_NEIGHBORHOOD_SIZE = 100
+LOCAL_NEIGHBORHOOD_SIZE = 2000
 EXTRA_SAMPLE_NEIGHBORHOOD_SIZE = 50
 #EXTRA_SAMPLE_COUNT = 3
 EXTRA_SAMPLE_COUNT = 0
@@ -56,11 +57,11 @@ def score_function(grasping_problem,point,linkgeom_idx,CoM,balance_residual,x,y,
     """
         
     # Goodness for force balance -- sort of like a cosine similarity
-    a1 = vectorops.dot(balance_residual[:3],normal(grasping_problem.complementarity.obj,point))
-
+    a1 = -vectorops.dot(balance_residual[:3],normal(grasping_problem.complementarity.obj,point))
+    
     # Distance to the object
     dist = (grasping_problem.complementarity.robot.geometry[linkgeom_idx].distance(list(point)))[0]
-    a2 = math.exp(-5*dist)
+    a2 = math.exp(-dist)
     
     return a1+a2
 
@@ -104,10 +105,10 @@ class RobotConfigObjective(ObjectiveFunctionInterface):
         self.weight = weight
     def value(self,q):
         return self.weight*self.robot.distance(q,self.qdes)**2
-    def gradient(self,x):
+    def gradient(self,q):
         dq = (np.asarray(q)-self.qdes)  #TODO: non-Cartesian spaces?
         return self.weight*2*self.robot.distance(q,self.qdes)*dq
-    def hessian(self,x):
+    def hessian(self,q):
         dq = (np.asarray(q)-self.qdes)  #TODO: non-Cartesian spaces?
         return self.weight*2*np.outer(dq,dq)
         
@@ -154,10 +155,11 @@ class RobotCollisionConstraint(SemiInfiniteConstraintInterface):
     Note: requires geometries to support distance queries
     Note: modifies the robot's config on each call.
     """
-    def __init__(self,robot,obj,gridres=0.001,pcres=0.001,robotcache=None):
+    def __init__(self,robot,obj,gridres=0.001,pcres=0.001,robotcache=None,collision_links=None):
         self.robot = robotcache if robotcache is not None else RobotKinematicsCache(robot,gridres,pcres)
         self.obj = PenetrationDepthGeometry(obj,gridres,pcres)
         self.scale = 1
+        self.collision_links = collision_links
     def dims(self):
         return 0
     def setx(self,q):
@@ -172,21 +174,13 @@ class RobotCollisionConstraint(SemiInfiniteConstraintInterface):
         """
         Returns the smallest distance between each link and the object
         """
-        # dmin = float('inf')
-        # closest = None
-        # if bound is None:
-        #     bound = float('inf')
         closepts = []
         for i,linkgeom in enumerate(self.robot.geometry):
-            if linkgeom:
+            if linkgeom and (not self.collision_links or i in self.collision_links):
                 d,p_obj,p_rob = self.obj.distance(linkgeom,bound)
-                #d,p_rob,p_obj = linkgeom.distance(self.obj,bound)
                 closepts.append((d*self.scale,[i,p_obj]))
         return closepts
-        #         if d < bound:
-        #             bound = d
-        #             closest = [i,p_obj]
-        # return bound,closest
+
     def df_dx(self,q,index_pt):
         link_idx,pt_obj = index_pt
         dist,point,_ = self.robot.geometry[link_idx].distance(pt_obj)
@@ -227,7 +221,7 @@ class Equilibrium3DConstraint(InfiniteAggregateConstraint):
     """
     This constraint requires that the object to be gripped is in both force and torque balance.
     """
-    def __init__(self,env_obj,env_geom,gravity_coefficient=-9.8,gravity_direction=[0,0,1],mass=1):
+    def __init__(self,env_obj,env_geom,gravity_coefficient=-9.8,gravity_direction=[0,0,1],mass=1.0):
         self.env_obj = env_obj
         self.env_geom = env_geom
         pointcloud = to_numpy(self.env_geom.pc.getPointCloud(),type="PointCloud")
@@ -350,10 +344,8 @@ def local_score_oracle(grasping_problem,x,y,z,
     dim_robo = len(x)
     T = grasping_problem.xyz_eq.env_geom.getTransform()
     CoM = se3.apply(T,grasping_problem.xyz_eq.env_obj.getMass().getCom())
-    if len(y) != 0:
-        balance_residual = grasping_problem.xyz_eq.value(x,y,z)
-    else:
-        balance_residual  = [0,0,9.8,0,0,0]
+    balance_residual = grasping_problem.xyz_eq.value(x,y,z)
+
     # Select new index point
     for i in range(dim_robo):
         # Add the point with the highest score as index point
@@ -415,7 +407,7 @@ def local_score_oracle(grasping_problem,x,y,z,
     return IndexSet
     
 def optimizeGrasping(robot,objs,init_config,gridres,pcres,score_oracle=ORACLE,collision_links=None):
-
+    print(f"Oracle used: {score_oracle}")
     robot.setConfig(init_config)
     
     robot_geometry = RobotKinematicsCache(robot,gridres,pcres)
@@ -429,7 +421,7 @@ def optimizeGrasping(robot,objs,init_config,gridres,pcres,score_oracle=ORACLE,co
     grasping_problem.z_lb = np.array([0,0,0,0,0,0,0])
     grasping_problem.domain = LinkAndGeometryDomain()
     grasping_problem.set_objective(ConstantObjectiveFunction(0))
-    grasping_problem.set_complementarity(RobotCollisionConstraint(robot,object_geometry,gridres,pcres,robot_geometry))
+    grasping_problem.set_complementarity(RobotCollisionConstraint(robot,object_geometry,gridres,pcres,robot_geometry,collision_links))
     grasping_problem.add_ineq(FrictionConstraint())
     grasping_problem.add_eq(Equilibrium3DConstraint(objs[0],object_geometry))
     grasping_problem.colliding_links = collision_links
@@ -472,9 +464,9 @@ def optimizeGrasping(robot,objs,init_config,gridres,pcres,score_oracle=ORACLE,co
                 for j in range(6):
                     n_tmp = (math.cos((math.pi/3)*j)*np.array(n1) + math.sin((math.pi/3)*j)*np.array(n2))
                     f += n_tmp*f_friction[j]
-                #f is the force pointing inward
-                #vis.add("n_{}".format(i),[yi[1],vectorops.madd(yi[1],normal,0.05)],color=(1,1,0,1),hide_label=True)
-                vis.add("f_{}".format(i),[yi[1],vectorops.madd(yi[1],f.tolist(),-1.0)],color=(1,0.5,0,1),hide_label=True)
+                # f is the force pointing inward
+                vis.add("n_{}".format(i),Trajectory([0,1],[yi[1],vectorops.madd(yi[1],n,0.05)]),color=(1,1,0,1),hide_label=True)
+                vis.add("f_{}".format(i),Trajectory([0,1],[yi[1],vectorops.madd(yi[1],f.tolist(),-1.0)]),color=(1,0.5,0,1),hide_label=True)
         finally:
             pass
         time.sleep(0.01)
@@ -482,7 +474,11 @@ def optimizeGrasping(robot,objs,init_config,gridres,pcres,score_oracle=ORACLE,co
     settings = SIPCCOptimizationSettings()
     settings.callback = lambda *args:vis.threadCall(lambda : update_robot_viz(*args))
     settings.min_index_point_distance = MINIMUM_INDEX_DISTANCE
-    x,y,z = optimizeSIPCC(grasping_problem,x_init,x_lb,x_ub,settings=settings)
+    t_start = time.time()
+    res = optimizeSIPCC(grasping_problem,x_init,x_lb,x_ub,settings=settings)
+    t_end = time.time()
+    res.time_opt = t_end - t_start
     vis.spin(float('inf'))
-
-    return x,y,z
+    
+    res.number_of_points = object_geometry.pcdata.numPoints()
+    return res

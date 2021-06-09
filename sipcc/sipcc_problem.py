@@ -7,28 +7,47 @@ import time
 class SIPCCOptimizationSettings:
     """Settings for the SIPCC programming solver."""
     def __init__(self):
-        self.max_iters = 30                           #Max # of outer iterations
+        self.max_iters = 100                          #Max # of outer iterations
         self.constraint_violation_tolerance = 0.001   #Termination if all inequality constraints are not violated more than this amount
-        self.complementarity_gap_tolerance = 0.001    #Termination if L1 norm of complementarity gap does not exceed this amount
-        self.equality_tolerance = 0.02                #Termination if L1 norm of equality constraint does not exceed this amount
-        self.mpcc_solver_params = {'Solver':'IPOPT', 'Major_step_limit':0.02, 'Max_Iters_init':20, 'Max_Iters_growth':2}
+        self.complementarity_gap_tolerance = 0.01     #Termination if L1 norm of complementarity gap does not exceed this amount
+        self.equality_tolerance = 0.01                #Termination if L1 norm of equality constraint does not exceed this amount
+        self.mpcc_solver_params = {'Solver':'SNOPT', 'Major_step_limit':0.005, 'Max_Iters_init':10, 'Max_Iters_growth':2}
         self.warm_start_z = True
-        self.min_index_point_distance = 0.001     #Eliminate index points that are within this distance from one another
+        self.min_index_point_distance = 0.001      #Eliminate index points that are within this distance from one another
         self.index_point_deletion_distance = 0.01           #Delete index points if their distances are greater than this OR
         self.index_variable_deletion_magnitude = 0.01       #... if their corresponding force variables are less than this OR
         self.index_point_deletion_complementarity = 0.001   #... their complementarity value is greater than this
-        self.LS_max_iters = 50                    #Max # of line search iterations
-        self.LS_shrink_coef = 0.8                 #Fraction to shrink line search step each iteration
-        self.max_violation_merit_weight = 10      #Penalize new penetrations in line search sharply
-        self.max_violation_limit = 0.005          #Allow 5mm max penetration in line search
+        self.LS_max_iters = 50                     #Max # of line search iterations
+        self.LS_shrink_coef = 0.8                  #Fraction to shrink line search step each iteration
+        self.max_violation_merit_weight = 1000     #Penalize new penetrations in line search sharply
+        self.max_violation_limit = 0.005           #Allow 5mm max penetration in line search
         self.callback = None
+
+class SIPCCOptimizationResult:
+    def __init__(self):
+        self.x0 = None
+        self.instantiated_params = []
+        self.num_iterations = 0
+        self.status = 'not converged'
+        
+        self.xlog = []
+        self.IndexSum = 0
+        self.activeIndexSum = 0
+        self.result = {'x_star':None,'y_star':None,'z_star':None}
+        
+        self.time_opt = None
+        self.complementarity_gap = None
+        self.InfiniteAggregateConstraint_violation = None
+        self.total_maximum_violation = None
+        
+        self.number_of_points = None
         
 class SIPCCProblem:
     """Formulates a semi-infinite problem with complementary constraints
 
     min_x,z f(x,z) s.t.                (objective)
-        g(x,y) >= 0 for all y          (complementary)
-        g(x;y)^T S*z(y) == 0 for all y (complementary constraint)
+        g(x,y) >= 0 for all y          (complementarity)
+        g(x;y)^T S*z(y) == 0 for all y (complementarity constraint)
         z(y) >= 0 for all y            (nonnegativity constraint)
         c(x) >= 0                      (x_ineq)
         d(x) == 0                      (x_eq)
@@ -180,7 +199,10 @@ class SIPCCProblem:
             for i,yi in enumerate(y):
                 zi = z[i*self.dim_z:(i+1)*self.dim_z]
                 res.append(c(x,yi,zi))
-            res = np.hstack(res)
+            if len(res) != 0:
+                res = np.hstack(res)
+            else:
+                res = 0
         return res
     
     def eval_z_bound(self,x,y,z,single=False):
@@ -262,10 +284,10 @@ class SIPCCProblem:
         """
         inf = float('inf')
         if isinstance(self.objective,InfiniteObjectiveFunction):
-            f = _StackedInfiniteObjectiveAdaptor(self.objective,x,y,z)
+            f = _StackedInfiniteObjectiveAdaptor(self.objective,y,len(x))
         else:
             f = SlicedObjectiveFunction(self.objective,0,len(x))
-        if self.z_lb is None:  #all z's are lower bounded by zero
+        if self.z_lb is None:  # all z's are lower bounded by zero
             z_lb = np.zeros(len(z))
             z_ub = np.full(len(z),inf)
         else:
@@ -296,8 +318,6 @@ class SIPCCProblem:
                 c_ub.append(ub)
             # g(x,y)^T z(y) <= complementarity_slack
             cs.append(InfiniteConstraintToAggregateConstraint(self.get_complementarity_constraint()).concatenated_constraint(x,y,z))
-            # c_lb.append(np.full(len(y)*m,-inf))
-            # c_ub.append(np.full(len(y)*m,complementarity_slack))
             c_lb.append(np.full(len(y),-inf))
             c_ub.append(np.full(len(y),complementarity_slack))
         if self.x_ineq:
@@ -813,13 +833,13 @@ class _StackedInfiniteObjectiveAdaptor(ObjectiveFunctionInterface):
         self.inf_objective.setxyz(xi,self.y,zi)
     def value(self,x):
         xi = x[:self.xlen]
-        zi = x[self.xlen,:]
+        zi = x[self.xlen:]
         return self.inf_objective.value(xi,self.y,zi)
     def clearx(self):
         self.inf_objective.clearx()
     def gradient(self,x):
         xi = x[:self.xlen]
-        zi = x[self.xlen,:]
+        zi = x[self.xlen:]
         dfx = self.inf_objective.gradient_x(xi,self.y,zi)
         dfz = self.inf_objective.gradient_z(xi,self.y,zi)
         return np.concatenate([dfx,dfz])

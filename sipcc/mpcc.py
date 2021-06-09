@@ -6,7 +6,7 @@ def optimizeMPCC(objective,constraints,x_init,x_min,x_max,constraints_lb,constra
     
     dim_var = len(x_init)
     dim_con = len(constraints_lb)
-    # Objective function for SNOPT
+    # Objective function for Optimizer
     def objfunc(xdict):
         x = xdict["xvars"] 
         funcs = {}
@@ -33,7 +33,7 @@ def optimizeMPCC(objective,constraints,x_init,x_min,x_max,constraints_lb,constra
     rows = df0['coo'][0]
     cols = df0['coo'][0]
     
-    # Derivative function for SNOPT
+    # Derivative function for Optimizer
     def sens(xdict, funcs):
         x = xdict["xvars"] 
         
